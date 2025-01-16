@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>Label</key>
+        <string>com.foobar.daemon</string>
+        <key>Program</key>
+        <string>/Library/PrivilegedHelperTools/com.foobar.daemon</string>
+        <key>ProgramArguments</key>
+        <array>
+            <string>/Library/PrivilegedHelperTools/com.foobar.daemon</string>
+        </array>
+
+        <!-- This key maps to the first argument of execv(3) and is an app-bundle relative path to the executable for the job. This key is only supported for plists that are installed using SMAppService. -->
+        <key>BundleProgramArguments</key>
+        <string>Contents/Resources/daemon</string>
+
+        <key>RunAtLoad</key>
+        <false/>
+
+        <key>StandardOutPath</key>
+        <string>/tmp/com.foobar.daemon.out.log</string>
+        <key>StandardErrorPath</key>
+        <string>/tmp/com.foobar.daemon.err.log</string>
+        <key>Debug</key>
+        <true/>
+
+        <key>MachServices</key>
+        <dict>
+            <key>com.foobar.daemon.ping</key>
+            <true/>
+            <key>com.foobar.daemon.add</key>
+            <true/>
+            <key>com.foobar.daemon.panic</key>
+            <true/>
+        </dict>
+    </dict>
+</plist>

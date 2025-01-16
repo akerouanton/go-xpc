@@ -1,0 +1,4 @@
+root = true
+
+[*.{m,h}]
+indent_style = tab
