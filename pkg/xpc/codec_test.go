@@ -1,6 +1,7 @@
 package xpc
 
 import (
+	"fmt"
 	"net"
 	"reflect"
 	"testing"
@@ -143,6 +144,11 @@ func TestUnmarshalRoundTrip(t *testing.T) {
 	type User struct {
 		Name string `xpc:"name"`
 		Age  int    `xpc:"age"`
+	}
+
+	type CustomError struct {
+		Err error
+		Val int
 	}
 
 	tests := []struct {
@@ -329,6 +335,44 @@ func TestUnmarshalRoundTrip(t *testing.T) {
 			input:  struct{ IP net.IP }{IP: net.ParseIP("192.168.1.1")},
 			target: new(struct{ IP net.IP }),
 			want:   struct{ IP net.IP }{IP: net.ParseIP("192.168.1.1")},
+		},
+		{
+			name: "struct with error",
+			input: struct {
+				Error error
+			}{
+				Error: fmt.Errorf("test error"),
+			},
+			target: new(struct {
+				Error error
+			}),
+			want: struct {
+				Error error
+			}{
+				Error: fmt.Errorf("test error"),
+			},
+		},
+		{
+			name: "struct with custom error",
+			input: struct {
+				Error CustomError
+			}{
+				Error: CustomError{
+					Err: fmt.Errorf("test error"),
+					Val: 10,
+				},
+			},
+			target: new(struct {
+				Error CustomError
+			}),
+			want: struct {
+				Error CustomError
+			}{
+				Error: CustomError{
+					Err: fmt.Errorf("test error"),
+					Val: 10,
+				},
+			},
 		},
 	}
 

@@ -7,7 +7,9 @@ package xpc
 import "C"
 import (
 	"errors"
+	"fmt"
 	"reflect"
+	"strings"
 	"unsafe"
 )
 
@@ -25,6 +27,28 @@ func Marshal(v any) (C.xpc_object_t, error) {
 }
 
 func marshalVal(val any) (C.xpc_object_t, error) {
+	// Check if val implements error interface
+	if err, ok := val.(error); ok {
+		// If it's a struct or has fields we want to preserve, marshal it as a dictionary
+		v := reflect.ValueOf(val)
+		if v.Kind() == reflect.Struct || (v.Kind() == reflect.Ptr && v.Elem().Kind() == reflect.Struct) {
+			dict := C.xpc_dictionary_create_empty()
+			C.xpc_dictionary_set_value(dict, C.CString("_error"), C.xpc_string_create(C.CString(err.Error())))
+
+			elemVal := val
+			if v.Kind() == reflect.Ptr {
+				elemVal = v.Elem().Interface()
+			}
+			// Marshal the rest of the struct fields
+			if err := marshalIntoDict(dict, elemVal); err != nil {
+				return nil, err
+			}
+			return dict, nil
+		}
+		// For simple errors, just marshal the error message as a string
+		return C.xpc_string_create(C.CString(err.Error())), nil
+	}
+
 	v := reflect.ValueOf(val)
 	switch v.Kind() {
 	case reflect.Bool:
@@ -77,6 +101,9 @@ func marshalIntoDict(dst C.xpc_object_t, src any) error {
 		xpcKey := field.Tag.Get("xpc")
 		if xpcKey == "" {
 			xpcKey = field.Name
+		}
+		if strings.HasPrefix(xpcKey, "_") {
+			return fmt.Errorf("xpc key cannot start with underscore: %s", xpcKey)
 		}
 
 		item, err := Marshal(v.Field(i).Interface())
@@ -225,6 +252,15 @@ func unmarshalVal(obj C.xpc_object_t, typ reflect.Type) (interface{}, error) {
 		}
 
 	case C.XPC_TYPE_DICTIONARY:
+		if typ.Implements(reflect.TypeOf((*error)(nil)).Elem()) {
+			// If it's an error type, unmarshal as a string
+			item := C.xpc_dictionary_get_value(obj, C.CString("_error"))
+			if item != nil {
+				errStr := C.GoString(C.xpc_string_get_string_ptr(item))
+				return errors.New(errStr), nil
+			}
+			return nil, nil
+		}
 		if typ.Kind() == reflect.Struct {
 			result := reflect.New(typ).Elem()
 			for i := 0; i < typ.NumField(); i++ {
