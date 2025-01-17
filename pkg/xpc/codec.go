@@ -8,10 +8,17 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"unsafe"
 )
+
+type FD uintptr
+
+func (fd FD) File() *os.File {
+	return os.NewFile(uintptr(fd), "")
+}
 
 func Marshal(v any) (C.xpc_object_t, error) {
 	st := reflect.TypeOf(v)
@@ -84,6 +91,14 @@ func marshalVal(val any) (C.xpc_object_t, error) {
 			return nil, nil
 		}
 		return Marshal(v.Elem().Interface())
+	case reflect.Uintptr:
+		// Special case for FD type
+		if fd, ok := val.(FD); ok {
+			dict := C.xpc_dictionary_create_empty()
+			C.xpc_dictionary_set_value(dict, C.CString("_fd"), C.xpc_fd_create(C.int(fd)))
+			return dict, nil
+		}
+		fallthrough
 	default:
 		return nil, errors.New("unsupported type: " + v.Kind().String())
 	}
@@ -252,6 +267,16 @@ func unmarshalVal(obj C.xpc_object_t, typ reflect.Type) (interface{}, error) {
 		}
 
 	case C.XPC_TYPE_DICTIONARY:
+		// Special case for FD type
+		if typ == reflect.TypeOf(FD(0)) {
+			fdItem := C.xpc_dictionary_get_value(obj, C.CString("_fd"))
+			if fdItem != nil {
+				fd := C.xpc_fd_dup(fdItem)
+				return FD(fd), nil
+			}
+			return nil, errors.New("invalid or missing _fd in dictionary")
+		}
+
 		if typ.Implements(reflect.TypeOf((*error)(nil)).Elem()) {
 			// If it's an error type, unmarshal as a string
 			item := C.xpc_dictionary_get_value(obj, C.CString("_error"))

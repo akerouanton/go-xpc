@@ -1,13 +1,16 @@
 package xpc
 
 import (
+	"bufio"
 	"fmt"
 	"net"
+	"os"
 	"reflect"
 	"testing"
 	"unsafe"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMarshal(t *testing.T) {
@@ -399,6 +402,38 @@ func TestUnmarshalRoundTrip(t *testing.T) {
 
 func strPtr(s string) *string {
 	return &s
+}
+
+func TestUnmarshalFDRoundTrip(t *testing.T) {
+	f, err := os.CreateTemp(os.TempDir(), "xpc-marshal-fd")
+	require.NoError(t, err)
+	defer f.Close()
+
+	// First marshal the input
+	xpcObj, err := Marshal(struct {
+		FD FD
+	}{
+		FD: FD(f.Fd()),
+	})
+	require.NoError(t, err)
+
+	// Then unmarshal into the target
+	dst := struct {
+		FD FD
+	}{}
+	err = Unmarshal(unsafe.Pointer(xpcObj), &dst)
+	assert.NoError(t, err)
+
+	dstFile := dst.FD.File()
+	_, err = dstFile.WriteString("hello")
+	assert.NoError(t, err)
+	assert.NoError(t, dstFile.Close())
+
+	f.Seek(0, 0)
+	r := bufio.NewReader(f)
+	line, _, err := r.ReadLine()
+	assert.NoError(t, err)
+	assert.Equal(t, "hello", string(line))
 }
 
 // TestUnmarshalErrors tests error cases
